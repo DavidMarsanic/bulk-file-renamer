@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulk File Renamer</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main class="app">
+
+  <div id="chooser" class="chooser">
+    <button id="chooseFolderBtn" class="btn primary" type="button">Choose a folder to rename files in</button>
+    <p class="hint">Find/replace, numbering, dates, and regex rules with a live preview before anything touches
+      disk — and one-click Undo after.</p>
+  </div>
+
+  <div id="error" class="error hidden"></div>
+
+  <section id="workspace" class="workspace hidden">
+
+    <div class="folder-bar">
+      <span id="folderPath" class="folder-path"></span>
+      <button id="rechooseBtn" class="link-btn" type="button">Choose a different folder</button>
+    </div>
+
+    <section class="files-section">
+      <div class="files-header">
+        <label class="checkbox-label"><input type="checkbox" id="recursiveToggle"> Include subfolders</label>
+        <div class="files-actions">
+          <button id="selectAllBtn" class="link-btn" type="button">Select all</button>
+          <button id="selectNoneBtn" class="link-btn" type="button">Select none</button>
+        </div>
+      </div>
+      <p id="filesSummary" class="files-summary"></p>
+      <div id="fileList" class="file-list"></div>
+    </section>
+
+    <section class="rules-section">
+      <div class="rules-header">
+        <h2>Rules</h2>
+        <div class="add-rule">
+          <select id="ruleTypeSelect" aria-label="Rule type to add">
+            <option value="find-replace">Find &amp; replace</option>
+            <option value="regex-replace">Regex replace</option>
+            <option value="sequence">Sequence number</option>
+            <option value="date">Date</option>
+            <option value="case">Change case</option>
+            <option value="trim">Trim characters</option>
+            <option value="remove-chars">Remove characters</option>
+            <option value="extension">Change extension</option>
+          </select>
+          <button id="addRuleBtn" class="btn" type="button">Add rule</button>
+        </div>
+      </div>
+      <div id="ruleList" class="rule-list"></div>
+      <p id="noRules" class="hint">No rules yet — add one above. With no rules, files keep their current names.</p>
+    </section>
+
+    <section class="preview-section">
+      <div class="preview-header">
+        <h2>Preview</h2>
+        <span id="previewCount" class="hint"></span>
+      </div>
+      <div id="collisionBanner" class="collision-banner hidden"></div>
+      <p id="noPreview" class="hint">Select at least one file and add a rule to see a preview.</p>
+      <div id="previewTableWrap" class="preview-table-wrap hidden">
+        <table class="preview-table">
+          <thead><tr><th>Old name</th><th></th><th>New name</th></tr></thead>
+          <tbody id="previewBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="apply-bar">
+      <button id="applyBtn" class="btn primary" type="button" disabled>Rename files</button>
+      <div id="applyProgress" class="apply-progress hidden">
+        <div class="progress-bar"><div class="progress-fill indeterminate"></div></div>
+        <span id="applyProgressLabel"></span>
+      </div>
+    </div>
+
+    <div id="resultBanner" class="result-banner hidden">
+      <div class="result-message">
+        <strong id="resultCount"></strong>
+        <span id="resultErrors" class="result-errors"></span>
+        <p class="result-subtext">Something not right? Undo reverses this batch exactly — nothing is deleted, only
+          renamed back.</p>
+      </div>
+      <div class="result-actions">
+        <button id="undoBtn" class="btn danger" type="button">Undo</button>
+        <button id="revealFolderBtn" class="btn" type="button">Reveal folder</button>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+<script src="/app.js"></script>
+</body>
+</html>
