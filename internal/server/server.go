@@ -1,51 +1,42 @@
 // Package server exposes the bulk-file-renamer engine over a small
 // JSON+SSE HTTP API, bound to loopback only, for the embedded
-// browser-based UI.
+// browser-based UI. Shared server plumbing (loopback bind, idle-timeout
+// shutdown, job events/cancel routes) comes from brightencode-appkit;
+// reveal/open are this app's own (gated by the "known path" allowlist
+// below, not appkit's bare passthrough), and everything else is specific
+// to renaming.
 package server
 
 import (
 	"context"
-	"fmt"
-	"net"
 	"net/http"
-	"os"
 	"sync"
-	"sync/atomic"
-	"time"
 
+	appkit "github.com/DavidMarsanic/brightencode-appkit/server"
 	"github.com/DavidMarsanic/bulk-file-renamer/internal/engine"
-	"github.com/DavidMarsanic/bulk-file-renamer/internal/jobs"
 	"github.com/DavidMarsanic/bulk-file-renamer/web"
 )
 
-// idleTimeout is the only auto-shutdown mechanism: if nothing has hit the
-// server in this long AND no rename batch is actively running, the process
-// exits.
-const idleTimeout = 30 * time.Minute
-
 type Server struct {
-	Jobs *jobs.Registry
-	ctx  context.Context
+	*appkit.Server
 
 	mu          sync.Mutex
 	knownFolder string                        // the one folder /api/choose-folder most recently returned
 	knownPaths  map[string]struct{}           // every file path a /api/list call has ever returned for the current folder
 	entries     map[string]engine.FileEntry   // path -> cached listing entry, so /api/preview and /api/apply don't need to re-stat
 	results     map[string]engine.BatchResult // jobID -> finished ApplyBatch result
-
-	lastActivity atomic.Int64
 }
 
 func New(ctx context.Context) *Server {
-	s := &Server{
-		ctx:        ctx,
-		Jobs:       jobs.NewRegistry(),
+	appkitSrv := appkit.New(ctx, 0)
+	appkitSrv.SkipReveal = true
+	appkitSrv.SkipOpen = true
+	return &Server{
+		Server:     appkitSrv,
 		knownPaths: map[string]struct{}{},
 		entries:    map[string]engine.FileEntry{},
 		results:    map[string]engine.BatchResult{},
 	}
-	s.touch()
-	return s
 }
 
 // setKnownFolder records folder as the only folder this server will act on
@@ -132,53 +123,15 @@ func (s *Server) getResult(jobID string) (engine.BatchResult, bool) {
 	return r, ok
 }
 
-// Start binds 127.0.0.1:port (port 0 picks any free port — this UI is
-// never exposed beyond loopback) and serves until the process exits.
 func (s *Server) Start(port int) (string, error) {
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
-	if err != nil {
-		return "", fmt.Errorf("starting local server: %w", err)
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/choose-folder", s.handleChooseFolder)
-	mux.HandleFunc("POST /api/list", s.handleList)
-	mux.HandleFunc("POST /api/preview", s.handlePreview)
-	mux.HandleFunc("POST /api/apply", s.handleApply)
-	mux.HandleFunc("GET /api/jobs/{id}/events", s.handleJobEvents)
-	mux.HandleFunc("GET /api/apply/{id}", s.handleApplyResult)
-	mux.HandleFunc("POST /api/undo", s.handleUndo)
-	mux.HandleFunc("POST /api/reveal", s.handleReveal)
-	mux.HandleFunc("POST /api/open", s.handleOpen)
-	mux.Handle("GET /", http.FileServer(http.FS(web.Static)))
-
-	httpSrv := &http.Server{Handler: s.trackActivity(mux)}
-	go func() {
-		_ = httpSrv.Serve(ln)
-	}()
-	go s.watchIdle()
-
-	return "http://" + ln.Addr().String(), nil
-}
-
-func (s *Server) trackActivity(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.touch()
-		next.ServeHTTP(w, r)
+	return s.Server.Start(port, web.Static, func(mux *http.ServeMux) {
+		mux.HandleFunc("POST /api/choose-folder", s.handleChooseFolder)
+		mux.HandleFunc("POST /api/list", s.handleList)
+		mux.HandleFunc("POST /api/preview", s.handlePreview)
+		mux.HandleFunc("POST /api/apply", s.handleApply)
+		mux.HandleFunc("GET /api/apply/{id}", s.handleApplyResult)
+		mux.HandleFunc("POST /api/undo", s.handleUndo)
+		mux.HandleFunc("POST /api/reveal", s.handleReveal)
+		mux.HandleFunc("POST /api/open", s.handleOpen)
 	})
-}
-
-func (s *Server) touch() {
-	s.lastActivity.Store(time.Now().Unix())
-}
-
-func (s *Server) watchIdle() {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-	for range ticker.C {
-		idleFor := time.Now().Unix() - s.lastActivity.Load()
-		if idleFor > int64(idleTimeout.Seconds()) && !s.Jobs.HasActive() {
-			os.Exit(0)
-		}
-	}
 }

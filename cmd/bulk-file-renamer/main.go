@@ -15,7 +15,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/DavidMarsanic/bulk-file-renamer/internal/browser"
+	"github.com/DavidMarsanic/brightencode-appkit/browser"
 	"github.com/DavidMarsanic/bulk-file-renamer/internal/server"
 )
 
@@ -60,14 +60,13 @@ func run(args []string) int {
 
 	// When a host process (securexe-launcher) is the one showing the UI —
 	// in its own native window, so it can get a real Dock identity instead
-	// of a spawned Chrome window — it sets this before starting us and
-	// watches this same stderr line to discover the URL. Opening our own
-	// Chrome window too would just leave a second, redundant one.
-	if os.Getenv("SECUREXE_HOSTED") == "" {
-		if err := browser.OpenAppWindow(addr + "/"); err != nil {
-			fmt.Fprintln(os.Stderr, "couldn't open a window automatically:", err)
-			fmt.Fprintln(os.Stderr, "open this URL manually:", addr+"/")
-		}
+	// of a spawned Chrome window — it sets SECUREXE_HOSTED before starting
+	// us and watches this same stderr line to discover the URL.
+	// OpenIfNotHosted no-ops in that case; opening our own Chrome window
+	// too would just leave a second, redundant one.
+	if err := browser.OpenIfNotHosted("bulk-file-renamer", addr+"/"); err != nil {
+		fmt.Fprintln(os.Stderr, "couldn't open a window automatically:", err)
+		fmt.Fprintln(os.Stderr, "open this URL manually:", addr+"/")
 	}
 
 	<-ctx.Done()
